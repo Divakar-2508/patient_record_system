@@ -1,0 +1,10 @@
+[package]
+name = "patient_record"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+dotenv = "0.15.0"
+mongodb = "2.8.2"
+serde = "1.0.202"
+tokio = { version = "1.37.0", features = ["full"] }
