@@ -5,6 +5,8 @@ use mongodb::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::{DoctorDetails, PatientDetails};
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct PatientRecord {
     patient_id: usize,
@@ -91,7 +93,7 @@ impl PatientRecordManager {
         Ok(Self { database })
     }
 
-    pub async fn register_patient(&self, patient_name: &str, age: usize) -> Result<usize, String> {
+    pub async fn register_patient(&self, patient_details: PatientDetails) -> Result<usize, String> {
         let collection: Collection<PatientRecord> = self.database.collection("record");
         let counter_collection: Collection<Document> = self.database.collection("patient_counter");
 
@@ -114,7 +116,7 @@ impl PatientRecordManager {
 
         let patient_id = match patient_id.unwrap() {
             Some(result) => {
-                let id = result.get("count").and_then(Bson::as_i64).unwrap_or(0) as usize;
+                let id = result.get("count").unwrap().as_i32().unwrap();
                 id
             }
             None => {
@@ -122,8 +124,12 @@ impl PatientRecordManager {
             }
         };
 
-        let patient_record =
-            PatientRecord::new(patient_id, patient_name.to_lowercase(), age, Vec::new());
+        let patient_record = PatientRecord::new(
+            patient_id as usize,
+            patient_details.patient_name.to_lowercase(),
+            patient_details.patient_age,
+            Vec::new(),
+        );
 
         match collection.insert_one(patient_record, None).await {
             Ok(_) => Ok(patient_id as usize),
@@ -208,12 +214,7 @@ impl PatientRecordManager {
         }
     }
 
-    pub async fn register_doctor(
-        &self,
-        doctor_name: String,
-        hospital_name: String,
-        hospital_address: String,
-    ) -> Result<usize, String> {
+    pub async fn register_doctor(&self, doctor_details: DoctorDetails) -> Result<usize, String> {
         let collection: Collection<Doctor> = self.database.collection("doctor");
 
         let counter_collection: Collection<Document> = self.database.collection("doctor_count");
@@ -237,7 +238,7 @@ impl PatientRecordManager {
 
         let doctor_id = match doctor_id.unwrap() {
             Some(result) => {
-                let id = result.get("count").and_then(Bson::as_i64).unwrap_or(0) as usize;
+                let id = result.get("count").unwrap().as_i32().unwrap();
                 id
             }
             None => {
@@ -247,9 +248,9 @@ impl PatientRecordManager {
 
         let doctor = Doctor::new(
             doctor_id as usize,
-            doctor_name.to_lowercase(),
-            hospital_name,
-            hospital_address,
+            doctor_details.doctor_name.to_lowercase(),
+            doctor_details.hospital_name,
+            doctor_details.hospital_address,
         );
 
         match collection.insert_one(doctor, None).await {
