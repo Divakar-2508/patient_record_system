@@ -7,12 +7,14 @@ use rocket::futures::StreamExt;
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    hasher::RecordHasher,
     models::{DiagnosisReport, PatientRecord},
     DoctorDetails, PatientDetails,
 };
 
 pub struct PatientRecordManager {
     database: Database,
+    hasher: RecordHasher<'static>,
 }
 
 impl PatientRecordManager {
@@ -44,7 +46,9 @@ impl PatientRecordManager {
             .create_index(doctor_index_model, None)
             .await?;
 
-        Ok(Self { database })
+        let hasher = RecordHasher::new();
+
+        Ok(Self { database, hasher })
     }
 
     pub async fn register_patient(&self, patient_details: PatientDetails) -> Result<usize, String> {
@@ -56,6 +60,7 @@ impl PatientRecordManager {
                 "count": 1
             }
         };
+
         let find_and_modify_options = FindOneAndUpdateOptions::builder()
             .upsert(true)
             .return_document(mongodb::options::ReturnDocument::After)
@@ -64,6 +69,7 @@ impl PatientRecordManager {
         let patient_id = counter_collection
             .find_one_and_update(doc! {}, update_doc, find_and_modify_options)
             .await;
+
         if let Err(err) = patient_id {
             return Err(format!("{}", err.to_string()));
         }
@@ -246,6 +252,8 @@ impl PatientRecordManager {
             Err(err) => Err(err.to_string()),
         }
     }
+
+    // pub async fn validate_doctor_login() -> Result
 }
 
 #[derive(Serialize, Deserialize, Debug)]

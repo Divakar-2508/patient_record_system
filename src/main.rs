@@ -1,3 +1,4 @@
+pub mod hasher;
 pub mod models;
 pub mod record_client;
 pub mod response;
