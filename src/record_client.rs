@@ -1,62 +1,15 @@
 use mongodb::{
-    bson::{bson, doc, Bson, Document},
+    bson::{doc, Document},
     options::{FindOneAndUpdateOptions, IndexOptions},
     Client, Collection, Database, IndexModel,
 };
+use rocket::futures::StreamExt;
 use serde::{Deserialize, Serialize};
 
-use crate::{DoctorDetails, PatientDetails};
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct PatientRecord {
-    patient_id: usize,
-    patient_name: String,
-    age: usize,
-    diagnosis_reports: Vec<DiagnosisReport>,
-}
-
-impl PatientRecord {
-    fn new(
-        patient_id: usize,
-        patient_name: String,
-        age: usize,
-        diagnosis_reports: Vec<DiagnosisReport>,
-    ) -> Self {
-        Self {
-            patient_id,
-            patient_name: patient_name.to_string(),
-            age,
-            diagnosis_reports,
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct DiagnosisReport {
-    doctor_id: usize,
-    doctor_name: String,
-    details: String,
-}
-
-impl DiagnosisReport {
-    pub fn new(doctor_id: usize, doctor_name: String, details: String) -> Self {
-        Self {
-            doctor_id,
-            doctor_name,
-            details,
-        }
-    }
-}
-
-impl Into<Bson> for DiagnosisReport {
-    fn into(self) -> Bson {
-        bson!({
-            "doctor_id": self.doctor_id as i32,
-            "doctor_name": self.doctor_name,
-            "details": self.details
-        })
-    }
-}
+use crate::{
+    models::{DiagnosisReport, PatientRecord},
+    DoctorDetails, PatientDetails,
+};
 
 pub struct PatientRecordManager {
     database: Database,
@@ -75,6 +28,7 @@ impl PatientRecordManager {
             })
             .options(index_option.clone())
             .build();
+
         patient_collection
             .create_index(patient_index_model, None)
             .await?;
@@ -139,7 +93,7 @@ impl PatientRecordManager {
         }
     }
 
-    pub async fn add_diagnosis_report(
+    pub async fn add_diagnosis_reports(
         &self,
         patient_id: usize,
         report: DiagnosisReport,
@@ -167,6 +121,25 @@ impl PatientRecordManager {
                 }
             }
             Err(err) => Err(format!("Ran into Error: {}", err.to_string())),
+        }
+    }
+
+    pub async fn get_diagnosis_reports(&self, patient_id: usize) -> Result<PatientRecord, String> {
+        let collection: Collection<PatientRecord> = self.database.collection("record");
+
+        let filter = doc! {
+            "patient_id": patient_id as i32,
+        };
+
+        let mut cursor = collection
+            .find(filter, None)
+            .await
+            .map_err(|err| err.to_string())?;
+
+        if let Some(result) = cursor.next().await {
+            result.map_err(|err| err.to_string())
+        } else {
+            Err("Report Not Found".into())
         }
     }
 
@@ -258,6 +231,19 @@ impl PatientRecordManager {
             Err(err) => {
                 return Err(format!("Error while inserting, {}", err.to_string()));
             }
+        }
+    }
+
+    pub async fn get_doctor_by_id(&self, doctor_id: usize) -> Result<Doctor, String> {
+        let collection: Collection<Doctor> = self.database.collection("doctor");
+
+        let filter = doc! {
+            "doctor_id": doctor_id as i32,
+        };
+
+        match collection.find_one(filter, None).await {
+            Ok(record) => record.ok_or("No Entry Found".to_string()),
+            Err(err) => Err(err.to_string()),
         }
     }
 }
